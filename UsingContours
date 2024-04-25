@@ -1,0 +1,58 @@
+import cv2
+
+def capture_frames():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Cannot open camera")
+        exit()
+    frames = []
+    print("Press 'space' to capture a frame, need two frames. Press 'q' to quit without completing.")
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Can't receive frame (stream end?). Exiting ...")
+            break
+        cv2.imshow('Frame', frame)
+        key = cv2.waitKey(1)
+        if key == ord(' '):
+            frames.append(frame)
+            if len(frames) == 2:
+                break
+            print(f"Frame {len(frames)} captured, press 'space' again to capture another frame.")
+        elif key == ord('q'):
+            print("Exiting program as requested.")
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+    return frames
+
+def process_and_save_frames(frames):
+    if len(frames) < 2:
+        print("Not enough frames captured to process.")
+        return
+    diff = cv2.absdiff(frames[0], frames[1])
+    gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+    
+    # Find contours
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # Fill the contours (change color inside to white)
+    cv2.drawContours(thresh, contours, -1, (255, 255, 255), thickness=cv2.FILLED)
+    
+    # Optionally, draw the contours to visualize them
+    contour_img = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+    cv2.drawContours(contour_img, contours, -1, (0, 0, 0), 2)
+    
+    cv2.imwrite('difference_image.png', thresh)
+    print("Difference image saved as 'difference_image.png'.")
+    cv2.imshow('Filled Contours', thresh)
+    cv2.imshow('Contours on Image', contour_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def main():
+    frames = capture_frames()
+    process_and_save_frames(frames)
+
+if __name__ == "__main__":
+    main()
