@@ -1,0 +1,88 @@
+import cv2
+import numpy as np
+
+def capture_frame(cap, prompt):
+    print(prompt)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Can't receive frame (stream end?). Exiting ...")
+            return None
+        cv2.imshow('Frame', frame)
+        key = cv2.waitKey(1)
+        if key == ord(' '):  # space bar to capture frame
+            print("Frame captured.")
+            cv2.destroyAllWindows()
+            return frame
+        elif key == ord('q'):  # 'q' to quit the program
+            print("Exiting program as requested.")
+            cv2.destroyAllWindows()
+            return None
+
+def create_alpha_mask(frame_blank, frame_with_papers):
+    # Calculate the absolute difference between frames
+    diff = cv2.absdiff(frame_blank, frame_with_papers)
+    
+    # Convert to grayscale and apply a threshold to get a binary image
+    gray = cv2.cvtColor(diff, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(gray, 30, 255, cv2.THRESH_BINARY)
+    
+    # Find contours and filter as required
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    min_area = 500
+    large_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_area]
+
+    # Create an empty mask for the alpha channel
+    alpha_mask = np.zeros_like(binary)
+    
+    # Fill the large contours with white (maximum alpha value)
+    cv2.drawContours(alpha_mask, large_contours, -1, (255), thickness=cv2.FILLED)
+
+    return alpha_mask
+
+def main():
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Cannot open camera")
+        return
+
+    # Step 1: Capture the blank surface
+    frame_blank = capture_frame(cap, "Capture the blank surface: Press 'space'. Press 'q' to quit.")
+    if frame_blank is None:
+        cap.release()
+        return
+    
+    # Inform the user to turn on the map and place the papers
+    input("Turn on the map projection and place the papers. Then press Enter.")
+    
+    # Step 3: Capture the surface with the papers
+    frame_with_papers = capture_frame(cap, "Capture the surface with papers: Press 'space'. Press 'q' to quit.")
+    if frame_with_papers is None:
+        cap.release()
+        return
+    
+    cap.release()
+    
+    # Step 4: Create an alpha mask of the papers
+    alpha_mask = create_alpha_mask(frame_blank, frame_with_papers)
+    
+    # Convert the mask to a 3-channel image
+    alpha_mask_3ch = cv2.merge([alpha_mask, alpha_mask, alpha_mask])
+    
+    # Extract the paper regions from the frame with papers
+    papers_color = cv2.bitwise_and(frame_with_papers, frame_with_papers, mask=alpha_mask)
+    
+    # Create the final image with transparent background
+    final_image = np.dstack([papers_color, alpha_mask])
+    
+    # Save the final image
+    cv2.imwrite('papers_alpha_mask.png', final_image)
+    print("Alpha mask of the papers saved as 'papers_alpha_mask.png'.")
+
+    # Optionally, show the result
+    cv2.imshow('Papers with Alpha Mask', final_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    main()
